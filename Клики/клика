@@ -1,0 +1,267 @@
+#define _USE_MATH_DEFINES
+#include <iostream>
+#include <vector>
+#include <cmath>
+#include <string>
+#include <algorithm>
+#include <random>
+#include <ctime>
+#include <clocale>
+using namespace std;
+bool isClique(const vector<vector<int>>& a, const vector<int>& sub) {
+    int n = sub.size();
+    if (n <= 1) {
+        return true;
+    }
+    for (int i = 0; i < n; ++i) {
+        for (int j = i + 1; j < n; ++j) {
+            int u = sub[i];
+            int v = sub[j];
+            if (a[u][v] == 0) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+bool gen(int n, int k, vector<int>& combination) {
+    if (k > n) return false;
+    for (int i = 0; i < k; ++i) {
+        combination[i] = i;
+    }
+    return true;
+}
+bool next_combination(int n, int k, vector<int>& combination) {
+    int i = k - 1;
+    while (i >= 0 && combination[i] == n - k + i) {
+        --i;
+    }
+    if (i < 0) return false;
+    ++combination[i];
+    for (int j = i + 1; j < k; ++j) {
+        combination[j] = combination[j - 1] + 1;
+    }
+    return true;
+}
+vector<int> findCliqueGreaterThanB(const vector<vector<int>>& a, int B) {
+    int points = a.size();
+    vector<int> larg;
+    int min = INT_MAX;
+    for (int k = B + 1; k <= points; ++k) {
+        vector<int> combination;
+        combination.resize(k);
+        if (gen(points, k, combination)) {
+            do {
+                if (isClique(a, combination) && combination.size() < min) {
+                    larg = combination;
+                    min = combination.size();
+                }
+            } while (next_combination(points, k, combination));
+        }
+    }
+    return larg;
+}
+bool hasEdge(int u, int v, const vector<vector<int>>& adjacencyMatrix) {
+    return adjacencyMatrix[u][v] == 1;
+}
+vector<int> findmaxcliq(const vector<vector<int>>& a) {
+    int points = a.size();
+    int c = 0;
+    vector<int> maxcliq;
+    bool foundmaxcliq = false;
+    for (int k = points; k >= 1; --k) {
+        c = 0;
+        vector<int> combination;
+        combination.resize(k);
+        if (gen(points, k, combination)) {
+            cout << "n=" << points << ", k=" << k << ", все комбинации №" << points - k + 1 << ":" << endl;
+            do {
+                c++;
+                combination.push_back(combination[0]);
+                cout << "{";
+                for (int i = 0; i < combination.size(); ++i) {
+                    if (i + 1 < combination.size() && hasEdge(combination[i], combination[i + 1], a)) {
+                        cout << combination[i] << (i == k ? "" : " - ");
+                    }
+                    else {
+                        cout << combination[i] << (i == k ? "" : ", ");
+                    }
+                }
+                combination.pop_back();
+                cout << "}, №" << c;
+                if (isClique(a, combination)) {
+                    cout << "     - клика";
+                    if (combination.size() > maxcliq.size()) {
+                        maxcliq = combination;
+                        cout << " - максимальная клика";
+                        foundmaxcliq = true;
+                    }
+                }
+                cout << endl;
+                if (foundmaxcliq) {
+                    break;
+                }
+            } while (next_combination(points, k, combination) && !foundmaxcliq);
+        }
+        if (foundmaxcliq) {
+            break;
+        }
+    }
+    return maxcliq;
+}
+void drawGraph(const vector<vector<int>>& adjacencyMatrix, const vector<int>& cliqueB, const vector<int>& maxClique)
+{
+    int numVertices = adjacencyMatrix.size();
+    const int width = 90;
+    const int height = 60;
+    const int centerX = width / 2;
+    const int centerY = height / 2;
+    const int radius = min(centerX, centerY) * 0.8;
+    vector<pair<int, int>> positions(numVertices);
+    for (int i = 0; i < numVertices; ++i) {
+        double angle = 2.0 * M_PI * i / numVertices;
+        positions[i] = {
+            centerX + static_cast<int>(radius * cos(angle)),
+            centerY + static_cast<int>(radius * sin(angle))
+        };
+    }
+    vector<vector<char>> screen(height, vector<char>(width, ' '));
+    vector<bool> isCliqueBVertex(numVertices, false);
+    for (int v_id : cliqueB) {
+        if (v_id >= 0 && v_id < numVertices) {
+            isCliqueBVertex[v_id] = true;
+        }
+    }
+    vector<bool> isMaxCliqueVertex(numVertices, false);
+    for (int v_id : maxClique) {
+        if (v_id >= 0 && v_id < numVertices) {
+            isMaxCliqueVertex[v_id] = true;
+        }
+    }
+    for (int i = 0; i < numVertices; ++i) {
+        int x = positions[i].first;
+        int y = positions[i].second;
+        if (x >= 0 && x < width && y >= 0 && y < height) {
+            char vertexChar;
+            if (isMaxCliqueVertex[i]) {
+                vertexChar = '#';
+            }
+            else if (isCliqueBVertex[i]) {
+                vertexChar = '*';
+            }
+            else {
+                vertexChar = 'o';
+            }
+            screen[y][x] = vertexChar;
+            string idStr = to_string(i);
+            if (x + 1 < width) screen[y][x + 1] = idStr[0];
+            if (idStr.length() > 1 && x + 2 < width) screen[y][x + 2] = idStr[1];
+        }
+    }
+    for (int i = 0; i < numVertices; ++i) {
+        for (int j = i + 1; j < numVertices; ++j) {
+            if (adjacencyMatrix[i][j] == 1) {
+                int x1 = positions[i].first;
+                int y1 = positions[i].second;
+                int x2 = positions[j].first;
+                int y2 = positions[j].second;
+                int dx = abs(x2 - x1);
+                int dy = abs(y2 - y1);
+                int sx = (x1 < x2) ? 1 : -1;
+                int sy = (y1 < y2) ? 1 : -1;
+                int err = dx - dy;
+                int x = x1;
+                int y = y1;
+                while (x != x2 || y != y2) {
+                    if (x >= 0 && x < width && y >= 0 && y < height && screen[y][x] == ' ') {
+                        screen[y][x] = '-';
+                    }
+                    int e2 = 2 * err;
+                    if (e2 > -dy) {
+                        err -= dy;
+                        x += sx;
+                    }
+                    if (e2 < dx) {
+                        err += dx;
+                        y += sy;
+                    }
+                    if (x == x2 && y == y2) break;
+                }
+            }
+        }
+    }
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            cout << screen[y][x];
+        }
+        cout << endl;
+    }
+}
+int main() {
+    setlocale(LC_ALL, "Russian");
+    srand(time(0));
+    int points;
+    int lim;
+    int n;
+    cout << "Введите кол-во вершин:";
+    cin >> points;
+    lim = points * ((points - 1) / 2);
+    cout << "Введите кол-во соединений(максимум " << lim << "): ";
+    cin >> n;
+    vector<vector<int>> a(points, vector<int>(points, 0));
+    vector<pair<int, int>> allp;
+    for (int i = 0; i < points; ++i) {
+        for (int j = i; j < points; ++j) {
+            if (j != i) {
+                allp.push_back({ i, j });
+            }
+        }
+    }
+    shuffle(allp.begin(), allp.end(), default_random_engine(time(0)));
+    int edgesCount = 0;
+    for (size_t k = 0; k < allp.size() && edgesCount < n; ++k) {
+        int i = allp[k].first;
+        int j = allp[k].second;
+        a[i][j] = 1;
+        a[j][i] = 1;
+        edgesCount++;
+    }
+    cout << "Матрица" << endl;
+    for (int i = 0; i < points; ++i) {
+        for (int j = 0; j < points; ++j) {
+            if(a[i][j]==0)
+            cout <<"\x1B[31m"<< a[i][j] << " ";
+            else
+                cout << "\x1B[32m" << a[i][j] << " ";
+        }
+        cout << endl;
+    }
+    int B;
+    cout<<"\x1B[32m" << "Введите значение B: ";
+    if (!(cin >> B)) {
+        cerr << "Ошибка ввода B." << endl;
+        return 1;
+    }
+    vector<int> cliq = findCliqueGreaterThanB(a, B);
+    if (!cliq.empty()) {
+        cout << "В графе существует клика больше, чем " << B << "." << endl;
+        cout << "Вершины этой клики: ";
+        for (size_t i = 0; i < cliq.size(); ++i) {
+            cout << cliq[i] << (i == cliq.size() - 1 ? "" : ", ");
+        }
+        cout << endl;
+    }
+    else {
+        cout << "В графе не существует клики больше, чем " << B << "." << endl;
+    }
+    vector<int> maxcliq = findmaxcliq(a);
+    cout << "Максимальная клика в графе" << endl;
+    cout << "Размер клики: " << maxcliq.size() << endl;
+    cout << "Вершины клики: ";
+    for (size_t i = 0; i < maxcliq.size(); ++i) {
+        cout << maxcliq[i] << (i == maxcliq.size() - 1 ? "" : ", ");
+    }
+    cout << endl;
+    drawGraph(a, cliq, maxcliq);
+    return 0;
+}

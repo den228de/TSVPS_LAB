@@ -1,0 +1,299 @@
+#include <iostream>
+#include <vector>
+#include <cstdlib>
+#include <ctime>
+#include <algorithm>
+#include <math.h>
+#include <numeric> 
+#include <ctime>
+#include <SFML/Graphics.hpp>
+using namespace std;
+using namespace sf;
+void drawGR(RenderWindow& window, vector<double> acergr, vector<double> acergr1, double max, int n) {
+    window.clear(); // очищаем окно перед рендером
+    for (const auto& value : acergr) {
+        if (value >= max) {
+            max = value;
+        }
+    }
+    for (const auto& value : acergr1) {
+        if (value >= max) {
+            max = value;
+        }
+    }
+    max *= 1.005f;
+    // получаем размеры окна
+    Vector2u size = window.getSize();
+    // настраиваем шрифт
+    Font font;
+    if (!font.loadFromFile("C:\\Users\\user.VC\\Downloads\\ArialRegular.ttf")) {
+        cerr << "Could not load font!" << endl;
+        return;
+    }
+    // создаём списки элементов для обоих графиков
+    vector<CircleShape> points1(n);   // круги для первого набора данных
+    vector<CircleShape> points2(n);   // круги для второго набора данных
+    vector<Text> labels1(n * 2);          // подписи значений для первого набора
+    vector<Vertex> lineVertices1(n);  // вершины линии для первого набора
+    vector<Vertex> lineVertices2(n);  // вершины линии для второго набора
+    vector<Vertex> gridLines(4); // Две вершины на каждую линию
+    vector<Text> labelss3(n);
+    for (int i = 0; i < 10; ++i) {
+        string d = to_string(max * ((10.f * (i + 1)) / 100));
+        labels1[i].setString(d.substr(0, 3)); // подпись значения
+        labels1[i].setFont(font);
+        labels1[i].setCharacterSize(15);
+        labels1[i].setFillColor(Color::Blue);
+        labels1[i].setPosition(16, (size.y - 67) - ((i + 1) * (size.y * (9.f / 100))));
+    }
+    // рисование первого графика
+    for (int i = 0; i < n; ++i) {
+        float x; // отступы по краям
+        if (i == 0)
+        {
+            x = static_cast<float>(1) / (n)*size.x * (0.5);
+        }
+        else
+        {
+            x = static_cast<float>(i) / (n)*size.x * (1);
+        }
+        float y = (1.f - acergr[i] / max)
+            * (size.y * (90.f / 100));     // масштабируем относительно максимума
+        points1[i].setRadius(5);
+        points1[i].setFillColor(Color::Red);                        // красный цвет для первого набора
+        points1[i].setPosition(x - 5, y + 10);
+        string s = to_string(2 * (i + 1));
+        labelss3[i].setString(s);
+        labelss3[i].setFont(font);
+        labelss3[i].setCharacterSize(15); // Размер шрифта
+        labelss3[i].setFillColor(Color::Red);
+        labelss3[i].setPosition(x - 10, size.y - 55);
+        lineVertices1[i].position = { x, y + 15 };                       // задаём позицию вершины
+        lineVertices1[i].color = Color::Blue;
+    }
+    // рисование второго графика
+    for (int i = 0; i < n; ++i) {
+        float x; // отступы по краям
+        if (i == 0)
+        {
+            x = static_cast<float>(1) / (n)*size.x * (0.5);
+
+        }
+        else
+        {
+            x = static_cast<float>(i) / (n)*size.x * (1);
+        }
+        float y = (1.f - acergr1[i] / max) * (size.y * (90.f / 100));   // аналогично первому графику
+        points2[i].setRadius(5);
+        points2[i].setFillColor(Color::Green);                     // зелёный цвет для второго набора
+        points2[i].setPosition(x - 5, y + 10);
+        lineVertices2[i].position = { x, y + 15 };
+        lineVertices2[i].color = Color::Magenta;                    // фиолетовый цвет линии
+    }
+    gridLines[0].position = sf::Vector2f(0, size.y - 57);
+    gridLines[0].color = sf::Color::Blue;
+    gridLines[1].position = sf::Vector2f(size.x, size.y - 57);
+    gridLines[1].color = sf::Color::Blue;
+    gridLines[2].position = sf::Vector2f(40, 0);
+    gridLines[2].color = sf::Color::Blue;
+    gridLines[3].position = sf::Vector2f(40, size.y);
+    gridLines[3].color = sf::Color::Blue;
+    Text zero;
+    zero.setString("0"); // подпись значения
+    zero.setFont(font);
+    zero.setCharacterSize(15);
+    zero.setFillColor(Color::Red);
+    zero.setPosition(25, size.y - 55);
+    window.draw(gridLines.data(), gridLines.size(), Lines);
+    window.draw(zero);
+    window.draw(&lineVertices1[0], lineVertices1.size(), LinesStrip); // линия первого графика
+    window.draw(&lineVertices2[0], lineVertices2.size(), LinesStrip); // линия второго графика
+    for (const auto& point : points1) {
+        window.draw(point);                                         // точки первого графика
+    }
+    for (const auto& point : points2) {
+        window.draw(point);                                         // точки второго графика
+    }
+    for (const auto& label : labels1) {
+        window.draw(label);                                        // подписи первого графика
+    }
+    for (const auto& label : labelss3)
+    {
+        window.draw(label);
+    }
+}
+pair<vector<int>, vector<int>> per(vector<int> kamni, int n)
+{
+    long long tot = accumulate(kamni.begin(), kamni.end(), 0);
+    long long min = LLONG_MAX;
+    pair<vector<int>, vector<int>> best({}, {});
+    for (long long j = 0; j < (1LL << n); ++j)
+    {
+        vector<int>  gr, gr1;
+        long long sum = 0, sum1 = 0;
+        for (int i = 0; i < n; ++i)
+        {
+            if ((j >> i) & 1) {
+                gr.push_back(kamni[i]);
+                sum += kamni[i];
+            }
+            else {
+                gr1.push_back(kamni[i]);
+                sum1 += kamni[i];
+            }
+        }
+        long long diff = abs(sum - sum1);
+        if (diff < min) {
+            min = diff;
+            best = make_pair(gr, gr1);
+        }
+    }
+    return best;
+}
+int main()
+{
+    setlocale(LC_ALL, "Russian");
+    srand(time(0));
+    system("color 0A");
+    int n = 5, buff = 10, sum = 0, sum1 = 0, als = 0, k = 0, y = 0, jj, s;
+    vector<double> ac(10), ac1(10), acl(10), acp(10), ac1p(10), aclp(10);
+    vector<int> kamni(25), kuch, kuch1;
+    vector<vector<vector<double>>> test1(3);
+    vector<vector<double>> test(3);
+    vector<vector<double>> test2(3);
+    vector<vector<double>> test3(3);
+    for (n; n < 8; n++)
+    {
+        jj = 5;
+        for (y; y < 10; y++)
+        {
+            for (int p = 0; p < 10; p++) {
+                for (int i = 0; i < jj; i++)
+                {
+                    kamni[i] = (rand() % buff) + 1;
+                    als += kamni[i];
+                }
+                pair<vector<int>, vector<int>> partitions = per(kamni, n);
+                ac[y] = abs(double(accumulate(partitions.first.begin(), partitions.first.end(), 0) - accumulate(partitions.second.begin(), partitions.second.end(), 0)) / als) * 100;
+                for (int i = 0; i < jj; i++)
+                {
+                    for (int j = jj - 1; j > i; j--)
+                    {
+                        if (kamni[j] < kamni[j - 1]) {
+                            s = kamni[j];
+                            kamni[j] = kamni[j - 1];
+                            kamni[j - 1] = s;
+                        }
+                    }
+                }
+                for (int i = jj - 1; i >= 0; i--) {
+                    if (sum < sum1) {
+                        kuch.push_back(kamni[i]);
+                        sum += kamni[i];
+                    }
+                    else {
+                        kuch1.push_back(kamni[i]);
+                        sum1 += kamni[i];
+                    }
+                }
+                ac1[y] = (abs(double(sum - sum1)) / als) * 100;
+                acl[y] = abs(abs(ac[y]) - abs(ac1[y]));
+                als = 0;
+                acp[p] = ac[y];
+                ac1p[p] = ac1[y];
+                aclp[p] = acl[y];
+            }
+            ac[y] = double(accumulate(acp.begin(), acp.end(), 0)) / 10.f;
+            ac1[y] = double(accumulate(ac1p.begin(), ac1p.end(), 0)) / 10.f;
+            acl[y] = double(accumulate(aclp.begin(), aclp.end(), 0)) / 10.f;
+            jj += 2;
+        }
+        for (auto a : ac) {
+            cout << " |" << to_string(a).substr(0, 3) << "| ";
+        }
+        cout << endl;
+        for (auto a : ac1) {
+            cout << " |" << to_string(a).substr(0, 3) << "| ";
+        }
+        cout << endl << "---------------------------------------------------------------------" << endl;
+        test[n - 5] = ac;
+        test2[n - 5] = ac1;
+        test3[n - 5] = acl;
+        y = 0;
+        buff *= 2;
+    }
+    test1[0] = test;
+    test1[1] = test2;
+    test1[2] = test3;
+    int c = 0;
+    vector<double>kak(3), kak1(3);
+    for (auto testn : test1)
+    {
+        if (testn == test1[0])
+        {
+            cout << "Перебор: ";
+            for (auto vn : testn) {
+                cout << abs(accumulate(vn.begin(), vn.end(), 0.0) / (5 * (c + 1))) << "  ";
+                kak[c] = (abs(accumulate(vn.begin(), vn.end(), 0.0) / (5 * (c + 1))));
+                c++;
+            }
+        }
+        else if (testn == test1[1]) {
+            c = 0;
+            cout << endl << "Эвристика: ";
+            for (auto vn : testn) {
+                cout << abs(accumulate(vn.begin(), vn.end(), 0.0) / (5 * (c + 1))) << "  ";
+                kak1[c] = (abs(accumulate(vn.begin(), vn.end(), 0.0) / (5 * (c + 1))));
+                c++;
+            }
+        }
+        else if (testn == test1[2]) {
+            c = 0;
+            cout << endl << "Разница: ";
+            for (auto vn : testn) {
+                cout << abs(accumulate(vn.begin(), vn.end(), 0.0) / (5 * (c + 1))) << "  ";
+                c++;
+            }
+        }
+    }
+    //Синий-полный
+    wstring w1 = L"Вес=10", w2 = L"Вес=20", w3 = L"Вес=40";
+    RenderWindow window1(VideoMode(1300, 720), w1);
+    RenderWindow window2(VideoMode(1300, 720), w2);
+    RenderWindow window3(VideoMode(1300, 720), w3);
+    drawGR(window1, test[0], test2[0], 1.0f, 10);
+    drawGR(window2, test[1], test2[1], 1.0f, 10);
+    drawGR(window3, test[2], test2[2], 1.0f, 10);
+    window1.display();
+    window2.display();
+    window3.display();
+    window1.isOpen();
+    window3.isOpen();
+    window2.isOpen();
+    while (window1.isOpen() || window2.isOpen() || window3.isOpen())
+    {
+        Event event;
+        while (window1.pollEvent(event))
+        {
+            if (event.type == Event::Closed)
+            {
+                window1.close();
+            }
+        }
+        while (window2.pollEvent(event))
+        {
+            if (event.type == Event::Closed)
+            {
+                window2.close();
+            }
+        }
+        while (window3.pollEvent(event))
+        {
+            if (event.type == Event::Closed)
+            {
+                window3.close();
+            }
+        }
+    }
+    return 0;
+}

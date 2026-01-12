@@ -1,0 +1,269 @@
+#include <iostream>   
+#include <vector>     
+#include <cmath>      
+#include <algorithm>  
+#include <string>
+#include <bitset> 
+#include <queue>      
+#include <map>       
+#include <iomanip>    
+#include <locale>     
+#include <clocale>    
+using namespace std;
+class SingleHypercube {
+private:
+    int dimension;         
+    int total_processors_per_cube; // Общее количество процессоров в кубе (2^dimension)
+    vector<vector<int>> adjacency_matrix; // Матрица смежности, представляющая связи между процессорами
+public:
+    SingleHypercube(int dim) : dimension(dim), total_processors_per_cube(static_cast<int>(pow(2, dim))) {
+        adjacency_matrix.resize(total_processors_per_cube, vector<int>(total_processors_per_cube, 0));
+        build_hypercube();
+    }
+    void build_hypercube() {
+        for (int i = 0; i < total_processors_per_cube; ++i) {
+            for (int j = 0; j < dimension; ++j) {
+                int neighbor = i ^ (1 << j); // XOR для инвертирования j-го бита
+                adjacency_matrix[i][neighbor] = 1; // Устанавливаем связь
+                adjacency_matrix[neighbor][i] = 1; // Гиперкуб - неориентированный граф
+            }
+        }
+    }
+    int get_dimension() const { return dimension; }
+    int get_total_processors_per_cube() const { return total_processors_per_cube; }
+    const vector<vector<int>>& get_adjacency_matrix() const { return adjacency_matrix; }
+    string get_processor_binary_representation(int processor_id) const {
+        bitset<10> binary(processor_id); // Используем bitset<10>, т.к. dimension <= 10
+        return binary.to_string().substr(10 - dimension); // Обрезаем строку до нужной длины
+    }
+    vector<int> get_neighbors_within_cube(int processor_id) const {
+        vector<int> neighbors;
+        for (int neighbor_id = 0; neighbor_id < total_processors_per_cube; ++neighbor_id) {
+            if (adjacency_matrix[processor_id][neighbor_id]) {
+                neighbors.push_back(neighbor_id);
+            }
+        }
+        return neighbors;
+    }
+};
+class MultiCubeNetwork {
+private:
+    int num_cubes;                                 // Количество соединенных гиперкубов
+    int dimension_per_cube;                        // Размерность каждого гиперкуба
+    vector<SingleHypercube> cubes;                 // Вектор отдельных гиперкубов
+    vector<vector<int>> combined_adjacency_matrix; // Матрица смежности для всей сети
+    int total_processors_in_network;               // Общее количество процессоров во всей сети
+    struct NodeAddress {
+        int global_id;              // Уникальный глобальный ID процессора
+        int cube_id;                // ID куба, которому принадлежит процессор
+        int processor_id_within_cube; // ID процессора внутри куба
+        bool operator<(const NodeAddress& other) const {
+            return global_id < other.global_id; // Для использования в map
+        }
+        bool operator==(const NodeAddress& other) const {
+            return global_id == other.global_id;
+        }
+    };
+public:
+    NodeAddress decode_global_id(int global_id) const {
+        NodeAddress addr;
+        addr.global_id = global_id;
+        addr.processor_id_within_cube = global_id % (1 << dimension_per_cube);
+        addr.cube_id = global_id / (1 << dimension_per_cube);
+        return addr;
+    }
+    int encode_node_address(int cube_id, int processor_id_within_cube) const {
+        return cube_id * (1 << dimension_per_cube) + processor_id_within_cube;
+    }
+public:
+    MultiCubeNetwork(int n_cubes, int dim_per_cube) : num_cubes(n_cubes), dimension_per_cube(dim_per_cube) {
+        if (dim_per_cube > 10) {
+            cerr << "Ошибка: Размерность куба не должна превышать 10 для корректного отображения битов." << endl;
+            this->dimension_per_cube = 10;
+        }
+        // Создаем отдельные гиперкубы
+        for (int i = 0; i < num_cubes; ++i) {
+            cubes.emplace_back(dimension_per_cube);
+        }
+        total_processors_in_network = n_cubes * static_cast<int>(pow(2, dimension_per_cube));
+        combined_adjacency_matrix.resize(total_processors_in_network, vector<int>(total_processors_in_network, 0));
+        build_combined_topology();
+    }
+    void build_combined_topology() {
+        int processors_per_cube = (1 << dimension_per_cube);
+        // Копируем связи внутри каждого куба
+        for (int cube_id = 0; cube_id < num_cubes; ++cube_id) {
+            const auto& adj_matrix = cubes[cube_id].get_adjacency_matrix();
+            for (int proc_in_cube = 0; proc_in_cube < processors_per_cube; ++proc_in_cube) {
+                for (int neighbor_in_cube = 0; neighbor_in_cube < processors_per_cube; ++neighbor_in_cube) {
+                    if (adj_matrix[proc_in_cube][neighbor_in_cube]) {
+                        int global_proc1 = encode_node_address(cube_id, proc_in_cube);
+                        int global_proc2 = encode_node_address(cube_id, neighbor_in_cube);
+                        combined_adjacency_matrix[global_proc1][global_proc2] = 1;
+                        combined_adjacency_matrix[global_proc2][global_proc1] = 1;
+                    }
+                }
+            }
+        }
+        // Соединяем соответствующие вершины соседних кубов (кольцо)
+        for (int cube_id = 0; cube_id < num_cubes; ++cube_id) {
+            int next_cube_id = (cube_id + 1) % num_cubes; // Следующий куб в кольце
+            for (int proc_in_cube = 0; proc_in_cube < processors_per_cube; ++proc_in_cube) {
+                int global_proc_current_cube = encode_node_address(cube_id, proc_in_cube);
+                int global_proc_next_cube = encode_node_address(next_cube_id, proc_in_cube);
+                combined_adjacency_matrix[global_proc_current_cube][global_proc_next_cube] = 1;
+                combined_adjacency_matrix[global_proc_next_cube][global_proc_current_cube] = 1;
+            }
+        }
+    }
+    void print_topology() const {
+        cout << "--- Топология сети с несколькими кубами ---" << endl;
+        cout << "Количество кубов: " << num_cubes << endl;
+        cout << "Измерение в кубе: " << dimension_per_cube << endl;
+        cout << "Общее количество процессоров в сети: " << total_processors_in_network << endl;
+        cout << "-----------------------------------" << endl;
+        for (int global_id = 0; global_id < total_processors_in_network; ++global_id) {
+            NodeAddress addr = decode_global_id(global_id);
+            cout << "Глобальный процессор " << setw(3) << global_id << " (Куб " << addr.cube_id
+                << ", Процессор " << setw(3) << addr.processor_id_within_cube << ", ID: "
+                << cubes[addr.cube_id].get_processor_binary_representation(addr.processor_id_within_cube) << ")";
+            cout << " -> Сосед: ";
+            bool first = true;
+            for (int neighbor_global_id = 0; neighbor_global_id < total_processors_in_network; ++neighbor_global_id) {
+                if (combined_adjacency_matrix[global_id][neighbor_global_id]) {
+                    if (!first) cout << ", ";
+                    NodeAddress neighbor_addr = decode_global_id(neighbor_global_id);
+                    cout << neighbor_global_id << " (Куб " << neighbor_addr.cube_id
+                        << ", Процессор " << neighbor_addr.processor_id_within_cube << ")";
+                    first = false;
+                }
+            }
+            cout << endl;
+        }
+        cout << "-----------------------------------" << endl;
+    }
+    vector<int> find_shortest_path(int source_global_id, int destination_global_id) {
+        if (source_global_id == destination_global_id) {
+            return { source_global_id }; // Если источник и назначение совпадают
+        }
+        queue<int> q;           
+        map<int, int> parent;     // Карта "процессор -> родитель" для восстановления пути
+        map<int, int> distance;   // Карта "процессор -> расстояние от источника"
+        q.push(source_global_id);   // Начинаем с исходного процессора
+        distance[source_global_id] = 0;
+        parent[source_global_id] = -1; // У исходного процессора нет родителя
+        bool found = false; // Флаг, показывающий, был ли найден целевой процессор
+        while (!q.empty()) {
+            int u_global_id = q.front(); // Берем процессор из начала очереди
+            q.pop();                     // Удаляем его из очереди
+            if (u_global_id == destination_global_id) {
+                found = true; // Нашли целевой процессор
+                break;
+            }
+            // Итерируемся по всем процессорам сети, чтобы найти соседей u_global_id
+            for (int v_global_id = 0; v_global_id < total_processors_in_network; ++v_global_id) {
+                // Если есть связь между u_global_id и v_global_id
+                if (combined_adjacency_matrix[u_global_id][v_global_id]) {
+                    // Если v_global_id еще не посещен
+                    if (distance.find(v_global_id) == distance.end()) {
+                        distance[v_global_id] = distance[u_global_id] + 1; // Увеличиваем расстояние
+                        parent[v_global_id] = u_global_id;                 // Записываем родителя
+                        q.push(v_global_id);                             // Добавляем соседа в очередь
+                    }
+                }
+            }
+        }
+        // Восстанавливаем путь от целевого процессора к исходному
+        vector<int> path;
+        if (found) {
+            int current_global_id = destination_global_id;
+            while (current_global_id != -1) {
+                path.push_back(current_global_id); // Добавляем процессор в путь
+                current_global_id = parent[current_global_id]; // Переходим к родителю
+            }
+            reverse(path.begin(), path.end()); // Разворачиваем путь, чтобы получить прямой порядок
+        }
+        return path;
+    }
+    string format_global_id(int global_id) const {
+        NodeAddress addr = decode_global_id(global_id);
+        if (addr.cube_id < cubes.size()) {
+            return "Глобально " + to_string(global_id) + " (Куб " + to_string(addr.cube_id)
+                + ", Процессор " + to_string(addr.processor_id_within_cube) + ", ID: "
+                + cubes[addr.cube_id].get_processor_binary_representation(addr.processor_id_within_cube) + ")";
+        }
+        return "Неверный глобальный ID: " + to_string(global_id);
+    }
+    int get_total_processors_in_network() const { return total_processors_in_network; }
+    int get_dimension_per_cube() const { return dimension_per_cube; }
+};
+int main(int argc, char* argv[]) {
+   system("color 0A");
+    setlocale(LC_ALL, "Russian");
+    int n_dim_per_cube; 
+    int n_num_cubes;    
+    int search_method; 
+    cout << "--------------------------------------------------" << endl;
+    cout << "         Симуляция сети Гиперкубов" << endl;
+    cout << "--------------------------------------------------" << endl;
+    cout << "Выберите метод поиска кратчайшего пути:" << endl;
+    cout << "  1. Поиск BFS (для ОДНОГО куба)" << endl;
+    cout << "  2. Поиск BFS (для объединенных кубов)" << endl;
+    cout << "Ваш выбор (1 или 2): ";
+    cin >> search_method;
+    if (search_method != 1 && search_method != 2) {
+        cerr << "Ошибка: Некорректный выбор метода поиска." << endl;
+        return 1;
+    }
+    cout << "\nВведите размерность КАЖДОГО куба (1-10): ";
+    cin >> n_dim_per_cube;
+    if (n_dim_per_cube < 1 || n_dim_per_cube > 10) {
+        cout << "Некорректная размерность. Выберите от 1 до 10." << endl;
+        return 1;
+    }
+    if (search_method == 2) {
+        cout << "Введите количество кубов для соединения (>= 1): ";
+        cin >> n_num_cubes;
+        if (n_num_cubes < 1) {
+            cout << "Количество кубов должно быть не меньше 1." << endl;
+            return 1;
+        }
+    }
+    else {
+        n_num_cubes = 1; 
+    }
+    MultiCubeNetwork network(n_num_cubes, n_dim_per_cube);
+    network.print_topology();
+    int source_global_id, destination_global_id;
+    int total_procs = network.get_total_processors_in_network();
+    cout << "\nВведите ID исходного ГЛОБАЛЬНОГО процессора (0-" << total_procs - 1 << "): ";
+    cin >> source_global_id;
+    cout << "Введите ID конечного ГЛОБАЛЬНОГО процессора (0-" << total_procs - 1 << "): ";
+    cin >> destination_global_id;
+    if (source_global_id < 0 || source_global_id >= total_procs ||
+        destination_global_id < 0 || destination_global_id >= total_procs) {
+        cout << "Ошибка: ID процессора вне допустимого диапазона." << endl;
+        return 1;
+    }
+    vector<int> shortest_path = network.find_shortest_path(source_global_id, destination_global_id);
+    if (search_method == 1) {
+        cout << "\nКратчайший путь (BFS-метод, для ОДНОГО куба):" << endl;
+    }
+    else {
+        cout << "\nКратчайший путь:" << endl;
+    }
+    if (!shortest_path.empty()) {
+        for (size_t i = 0; i < shortest_path.size(); ++i) {
+            cout << network.format_global_id(shortest_path[i]);
+            if (i < shortest_path.size() - 1) {
+                cout << " -> ";
+            }
+        }
+        cout << endl;
+    }
+    else {
+        cout << "Путь не найден." << endl;
+    }
+
+    return 0;
+} 
