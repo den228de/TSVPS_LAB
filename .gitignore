@@ -187,6 +187,9 @@ desktop.ini
 *.dll
 *.dylib
 
+# ИСКЛЮЧЕНИЕ: Разрешаем .exe файлы в папке releases
+!releases/*.exe
+
 # Temporary files
 *.tmp
 *.temp
