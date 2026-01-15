@@ -5,7 +5,11 @@ echo ║     СБОРКА ПРИЛОЖЕНИЯ СИМУЛЯЦИИ СЕТИ ГИ�
 echo ╚════════════════════════════════════════════════════════════╝
 echo.
 
-echo [1/3] Проверка установки PyInstaller...
+echo [1/4] Установка зависимостей...
+pip install -r requirements.txt
+echo.
+
+echo [2/4] Проверка установки PyInstaller...
 pip show pyinstaller >nul 2>&1
 if errorlevel 1 (
     echo PyInstaller не найден. Устанавливаю...
@@ -15,11 +19,11 @@ if errorlevel 1 (
 )
 echo.
 
-echo [2/3] Сборка исполняемого файла...
-pyinstaller --onefile --windowed --name="HypercubeSimulator" --icon=NONE hypercube_gui.py
+echo [3/4] Сборка исполняемого файла...
+pyinstaller --onefile --windowed --name="HypercubeSimulator" --icon=NONE --hidden-import=matplotlib --hidden-import=networkx hypercube_gui.py
 echo.
 
-echo [3/3] Проверка результата...
+echo [4/4] Проверка результата...
 if exist "dist\HypercubeSimulator.exe" (
     echo.
     echo ╔════════════════════════════════════════════════════════════╗
