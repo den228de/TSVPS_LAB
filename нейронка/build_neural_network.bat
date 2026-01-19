@@ -5,33 +5,19 @@ echo   Сборка приложения "Нейронная сеть"
 echo ================================================
 echo.
 
-REM Проверка наличия Python
-python --version >nul 2>&1
-if errorlevel 1 (
-    echo ❌ Python не найден! Установите Python и повторите попытку.
-    pause
-    exit /b 1
-)
+REM Удаляем старые файлы сборки
+if exist build rmdir /s /q build
+if exist dist rmdir /s /q dist
+if exist NeuralNetwork.spec del /q NeuralNetwork.spec
 
-echo ✅ Python найден
-echo.
-
-REM Установка зависимостей
-echo 📦 Установка зависимостей...
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-python -m pip install pyinstaller
-echo.
-
-REM Сборка EXE
 echo 🔨 Сборка исполняемого файла...
-pyinstaller --noconfirm --onefile --windowed ^
+echo.
+
+pyinstaller --noconfirm ^
+    --onefile ^
+    --windowed ^
     --name "NeuralNetwork" ^
-    --add-data "neural_network.py;." ^
-    --hidden-import "numpy" ^
-    --hidden-import "matplotlib" ^
-    --hidden-import "tkinter" ^
-    --collect-all matplotlib ^
+    --icon=NONE ^
     neural_network_gui.py
 
 if errorlevel 1 (
@@ -46,6 +32,6 @@ echo ================================================
 echo   ✅ Сборка завершена успешно!
 echo ================================================
 echo.
-echo 📁 Исполняемый файл находится в папке: dist\NeuralNetwork.exe
+echo 📁 Исполняемый файл: dist\NeuralNetwork.exe
 echo.
 pause

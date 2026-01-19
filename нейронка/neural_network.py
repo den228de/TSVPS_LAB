@@ -176,6 +176,68 @@ class NeuralNetwork:
         
         return error_history
     
+    def train_on_dataset(self, training_samples: List[np.ndarray], 
+                        epochs: int = 10, verbose: bool = True) -> List[float]:
+        """
+        Обучение сети на множестве примеров для лучшего обобщения
+        
+        Args:
+            training_samples: Список обучающих примеров (каждый пример - это массив)
+            epochs: Количество эпох обучения
+            verbose: Выводить ли информацию о процессе обучения
+            
+        Returns:
+            Список средних ошибок для каждой эпохи
+        """
+        error_history = []
+        num_samples = len(training_samples)
+        
+        if verbose:
+            print("\n--- Начало обучения на множестве примеров ---")
+            print(f"Количество примеров: {num_samples}")
+            print(f"Количество эпох: {epochs}")
+        
+        # Вычисление начальной ошибки
+        total_error = 0
+        for sample in training_samples:
+            self.forward_propagation(sample)
+            error = np.sum((sample - self.output_layer) ** 2)
+            total_error += error
+        avg_error = total_error / num_samples
+        error_history.append(avg_error)
+        
+        if verbose:
+            print(f"\nЭпоха 0/{epochs}")
+            print(f"Средняя ошибка: {avg_error:.6f}")
+        
+        # Основной цикл обучения
+        for epoch in range(1, epochs + 1):
+            total_error = 0
+            
+            # Обучение на каждом примере
+            for sample in training_samples:
+                # Для задачи identity function: выход должен быть равен входу
+                self.forward_propagation(sample)
+                self.backpropagate(sample)
+                
+                # Вычисляем ошибку
+                prediction = self.output_layer
+                error = np.sum((sample - prediction) ** 2)
+                total_error += error
+            
+            avg_error = total_error / num_samples
+            error_history.append(avg_error)
+            
+            # Вывод информации
+            if verbose and (epoch == 1 or epoch % 2 == 0 or epoch == epochs):
+                print(f"\nЭпоха {epoch}/{epochs}")
+                print(f"Средняя ошибка: {avg_error:.6f}")
+        
+        if verbose:
+            print("\n--- Обучение завершено ---")
+        
+        return error_history
+    
     def predict(self, input_data: np.ndarray) -> np.ndarray:
         """
         Предсказание для новых данных
@@ -224,43 +286,82 @@ def main():
     # 100 нейронов во втором скрытом слое, 10 выходов
     nn = NeuralNetwork(10, 100, 100, 10, learning_rate=0.1)
     
-    # Обучающие данные
-    training_input = np.array([0.82, 0.68, 0.58, 0.52, 0.5, 0.52, 0.58, 0.68, 0.82, 1.0])
-    training_output = np.array([0.82, 0.68, 0.58, 0.52, 0.5, 0.52, 0.58, 0.68, 0.82, 1.0])
+    # Генерация обучающих данных
+    print("\n--- Генерация обучающих данных ---")
+    np.random.seed(42)
+    num_samples = 325
+    training_samples = []
     
-    # Обучение сети
-    error_history = nn.train(training_input, training_output, epochs=500)
+    for i in range(num_samples):
+        # Генерируем случайные данные в диапазоне [0, 1] (только положительные)
+        sample = np.random.uniform(0, 1, 10)
+        training_samples.append(sample)
     
-    # Финальное состояние после обучения
-    print("\n--- Финальное состояние сети после обучения ---")
-    nn.forward_propagation(training_input)
-    nn.print_state()
-    final_prediction = nn.output_layer.copy()
+    print(f"Создано {num_samples} обучающих примеров")
     
-    # Тестирование на новых данных
-    print("\n--- Тестирование на новых данных ---")
-    test_input = np.array([0.28, -0.28, -0.68, -0.92, -1.0, -0.92, -0.68, -0.28, 0.28, 1.0])
-    test_prediction = nn.predict(test_input)
-    nn.print_state()
+    # Обучение сети на множестве примеров
+    print("\nОбучение займет некоторое время...")
+    error_history = nn.train_on_dataset(training_samples, epochs=500, verbose=False)
+    print(f"Обучение завершено! Финальная ошибка: {error_history[-1]:.6f}")
+    
+    # Тестирование на оригинальных данных
+    print("\n" + "=" * 50)
+    print("ТЕСТИРОВАНИЕ")
+    print("=" * 50)
+    
+    # Тест 1: Оригинальные обучающие данные
+    print("\n--- Тест 1: Оригинальные данные ---")
+    test1_input = np.array([0.82, 0.68, 0.58, 0.52, 0.5, 0.52, 0.58, 0.68, 0.82, 1.0])
+    test1_prediction = nn.predict(test1_input)
+    test1_error = np.sum((test1_input - test1_prediction) ** 2)
+    
+    print(f"Вход:        {test1_input}")
+    print(f"Предсказание: {test1_prediction}")
+    print(f"Ошибка: {test1_error:.6f}")
+    print(f"Макс. разница: {np.max(np.abs(test1_input - test1_prediction)):.6f}")
+    
+    # Тест 2: Новые тестовые данные (только положительные)
+    print("\n--- Тест 2: Новые тестовые данные ---")
+    test2_input = np.array([0.28, 0.15, 0.32, 0.08, 0.0, 0.08, 0.32, 0.72, 0.28, 1.0])
+    test2_prediction = nn.predict(test2_input)
+    test2_error = np.sum((test2_input - test2_prediction) ** 2)
+    
+    print(f"Вход:        {test2_input}")
+    print(f"Предсказание: {test2_prediction}")
+    print(f"Ошибка: {test2_error:.6f}")
+    print(f"Макс. разница: {np.max(np.abs(test2_input - test2_prediction)):.6f}")
+    
+    # Тест 3: Случайные новые данные (только положительные)
+    print("\n--- Тест 3: Случайные новые данные ---")
+    np.random.seed(123)  # Другой seed для разнообразия
+    test3_input = np.random.uniform(0, 1, 10)
+    test3_prediction = nn.predict(test3_input)
+    test3_error = np.sum((test3_input - test3_prediction) ** 2)
+    
+    print(f"Вход:        {test3_input}")
+    print(f"Предсказание: {test3_prediction}")
+    print(f"Ошибка: {test3_error:.6f}")
+    print(f"Макс. разница: {np.max(np.abs(test3_input - test3_prediction)):.6f}")
     
     # Сводная информация
     print("\n" + "=" * 50)
     print("Сводная информация")
     print("=" * 50)
     
-    print("\n--- Сводка по ОБУЧЕНИЮ ---")
-    print(f"Количество нейронов: Вход={nn.input_size}, Скрытый1={nn.hidden_size1}, "
-          f"Скрытый2={nn.hidden_size2}, Выход={nn.output_size}")
-    print(f"Входные данные: {training_input}")
-    print(f"Ожидаемый результат: {training_output}")
-    print(f"Финальное предсказание: {final_prediction}")
-    print(f"Финальная ошибка: {error_history[-1]:.6f}")
+    print(f"\nАрхитектура: {nn.input_size}-{nn.hidden_size1}-{nn.hidden_size2}-{nn.output_size}")
+    print(f"Обучено на {num_samples} примерах")
+    print(f"Финальная средняя ошибка: {error_history[-1]:.6f}")
     
-    print("\n--- Сводка по ТЕСТИРОВАНИЮ ---")
-    print(f"Входные данные: {test_input}")
-    print(f"Предсказание: {test_prediction}")
+    avg_test_error = (test1_error + test2_error + test3_error) / 3
+    print(f"\nСредняя ошибка на тестах: {avg_test_error:.6f}")
+    
+    if avg_test_error < 0.5:
+        print("\n✅ Сеть хорошо обобщает! Ошибка на тестах минимальная.")
+    else:
+        print("\n⚠️  Сеть работает, но требует больше обучения.")
     
     print("\n" + "=" * 50)
+
 
 
 if __name__ == "__main__":
