@@ -1,0 +1,137 @@
+using System.Net.Sockets;
+using System.Net;
+using System.Net.Sockets;
+using System.Threading.Tasks;
+
+class Program
+{
+    const int NtpPort = 123;
+    const int NtpPacketSize = 48;
+    static readonly DateTime Epoch = new DateTime(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    static async Task Main(string[] args)
+    {
+        string server = "time.google.com";
+        int requests = 1;
+
+        // --- Парсинг аргументов ---
+        for (int i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--server" && i + 1 < args.Length)
+                server = args[++i];
+
+            if (args[i] == "--requests" && i + 1 < args.Length)
+                requests = int.Parse(args[++i]);
+        }
+
+        Console.WriteLine($"SNTP Client started. Server: {server}, Requests: {requests}\n");
+
+        for (int i = 0; i < requests; i++)
+        {
+            Console.WriteLine($"[Request {i + 1}]");
+
+            try
+            {
+                await SendRequest(server);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error: {ex.Message}\n");
+            }
+        }
+    }
+
+    static async Task SendRequest(string server)
+    {
+        using (var udp = new UdpClient())
+        {
+            udp.Connect(server, NtpPort);
+            udp.Client.ReceiveTimeout = 5000;
+
+            byte[] packet = new byte[NtpPacketSize];
+
+            // --- Формирование SNTP запроса ---
+            // LI = 0, VN = 4, Mode = 3
+            packet[0] = 0x23;
+
+            DateTime t1 = DateTime.UtcNow;
+            WriteTimestamp(packet, 40, t1);
+
+            // --- Отправка ---
+            await udp.SendAsync(packet, packet.Length);
+
+            // --- Получение ответа ---
+            var response = await udp.ReceiveAsync();
+            DateTime t4 = DateTime.UtcNow;
+
+            byte[] data = response.Buffer;
+
+            // --- Парсинг временных меток ---
+            DateTime t2 = ReadTimestamp(data, 32); // Receive Timestamp
+            DateTime t3 = ReadTimestamp(data, 40); // Transmit Timestamp
+
+            // --- Расчёты ---
+            double delay = (t4 - t1).TotalMilliseconds - (t3 - t2).TotalMilliseconds;
+            double offset = ((t2 - t1).TotalMilliseconds + (t3 - t4).TotalMilliseconds) / 2;
+
+            DateTime calculatedTime = t4 + TimeSpan.FromMilliseconds(offset);
+
+            // --- Вывод ---
+            Console.WriteLine($"SNTP Server: {server}");
+            Console.WriteLine($"Request sent: {t1.ToLocalTime():yyyy-MM-dd HH:mm:ss.fff} (Local) / {t1:yyyy-MM-dd HH:mm:ss.fff} (UTC)");
+            Console.WriteLine($"Server received: {t2:yyyy-MM-dd HH:mm:ss.fff} (UTC)");
+            Console.WriteLine($"Server sent: {t3:yyyy-MM-dd HH:mm:ss.fff} (UTC)");
+            Console.WriteLine($"Calculated time: {calculatedTime:yyyy-MM-dd HH:mm:ss.fff} (UTC)");
+            Console.WriteLine($"Network delay: {delay:F0} ms");
+            Console.WriteLine($"Time offset: {(offset >= 0 ? "+" : "")}{offset:F0} ms\n");
+        }
+    }
+
+    // --- Запись timestamp в NTP формате ---
+    static void WriteTimestamp(byte[] buffer, int offset, DateTime time)
+    {
+        var span = (time - Epoch).TotalSeconds;
+
+        ulong seconds = (ulong)span;
+        ulong fraction = (ulong)((span - seconds) * 0x100000000L);
+
+        WriteUInt(buffer, offset, seconds);
+        WriteUInt(buffer, offset + 4, fraction);
+    }
+
+    // --- Чтение timestamp ---
+    static DateTime ReadTimestamp(byte[] buffer, int offset)
+    {
+        ulong seconds = ReadUInt(buffer, offset);
+        ulong fraction = ReadUInt(buffer, offset + 4);
+
+        double totalSeconds = seconds + (fraction / (double)0x100000000L);
+        return Epoch.AddSeconds(totalSeconds);
+    }
+
+    // --- Работа с big-endian ---
+    static void WriteUInt32(byte[] buffer, int offset, ulong value)
+    {
+        buffer[offset] = (byte)(value >> 24);
+        buffer[offset + 1] = (byte)(value >> 16);
+        buffer[offset + 2] = (byte)(value >> 8);
+        buffer[offset + 3] = (byte)(value);
+    }
+
+    // --- Работа с big-endian ---
+    static void WriteUInt(byte[] buffer, int offset, ulong value)
+    {
+        buffer[offset] = (byte)(value >> 24);
+        buffer[offset + 1] = (byte)(value >> 16);
+        buffer[offset + 2] = (byte)(value >> 8);
+        buffer[offset + 3] = (byte)(value);
+    }
+
+    static ulong ReadUInt(byte[] buffer, int offset)
+    {
+        return ((ulong)buffer[offset] << 24) |
+               ((ulong)buffer[offset + 1] << 16) |
+               ((ulong)buffer[offset + 2] << 8) |
+               buffer[offset + 3];
+    }
+}
